@@ -1,0 +1,176 @@
+#!/usr/bin/python
+
+import argparse
+import os
+import os.path
+import re
+import hashlib
+import shutil
+
+parser = argparse.ArgumentParser(description='TTF/OTF font PKGBUILD generator')
+parser.add_argument('--pkgver', help='Package version default=1.0',
+                    default='1.0')
+parser.add_argument('--pkgrel', help='Package release number default=1',
+                    default='1')
+parser.add_argument('--pkgdesc', help='Package description default=\'[pkgname] font\'')
+parser.add_argument('pkgname', help='Package name')
+parser.add_argument('fontfiles', help='TTF/OTF font files',
+                    nargs='+')
+parser.add_argument('--outdir', help='Output directory')
+args = parser.parse_args()
+
+
+class FontpkgError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+def check_pkgname(s):
+    if not re.compile(r'^[a-z0-9._@+-]*$').search(s.strip()):
+        raise FontpkgError('pkgname error')
+
+
+def check_pkgver(s):
+    if not re.compile(r'^[a-z0-9._]*$').search(s.strip()):
+        raise FontpkgError('pkgver error')
+
+
+def check_pkgrel(s):
+    if not re.compile(r'^[0-9]*$').search(s.strip()):
+        raise FontpkgError('pkgrel error')
+
+
+def check_fonts(s):
+    ttf = False
+    otf = False
+    for i in s:
+        if i.lower().endswith('ttf'):
+            ttf = True
+        elif i.lower().endswith('otf'):
+            otf = True
+        else:
+            raise FontpkgError('{} is not TTF or OTF font'.format(i))
+    return (ttf, otf)
+
+
+class FontpkgInfo:
+    def __init__(self, pkgname, pkgver, pkgrel, pkgdesc, fonts):
+        check_pkgname(pkgname)
+        check_pkgver(pkgver)
+        check_pkgrel(pkgrel)
+        self.pkgname = pkgname
+        self.pkgver = pkgver
+        self.pkgrel = pkgrel
+        if pkgdesc:
+            self.pkgdesc = pkgdesc
+        else:
+            self.pkgdesc = '{} font'.format(pkgname)
+        self.fonts = []
+        for i in fonts:
+            self.fonts.append(os.path.basename(i))
+        self.ttf, self.otf = check_fonts(self.fonts)
+
+    def __repr__(self):
+        return '{}({})'.format(self.__class__, self.__dict__)
+
+# print('Checking argument')
+fi = FontpkgInfo(args.pkgname, args.pkgver, args.pkgrel, args.pkgdesc, args.fontfiles)
+
+# print('Making output directory')
+if args.outdir:
+    outdir = args.outdir
+else:
+    outdir = fi.pkgname
+
+if os.path.exists(outdir):
+    raise FontpkgError('cannot create directory \'{}\': File exists'.format(outdir))
+
+os.mkdir(outdir)
+
+# print('Copying font files')
+for i in args.fontfiles:
+    shutil.copy(i, outdir)
+
+os.chdir(outdir)
+
+install = '''
+post_install() {
+    echo -n "Updating font cache... "
+    fc-cache >/dev/null -f
+'''
+if fi.ttf:
+    install += '''
+    mkfontscale /usr/share/fonts/TTF
+    mkfontdir   /usr/share/fonts/TTF
+'''
+if fi.otf:
+    install += '''
+    mkfontscale /usr/share/fonts/OTF
+    mkfontdir   /usr/share/fonts/OTF
+'''
+install += '''
+    echo "done"
+}
+
+post_upgrade() {
+      post_install
+}
+
+post_remove() {
+      post_install
+}
+'''
+install = install.strip()
+
+install_file = '{}.install'.format(fi.pkgname)
+if os.path.exists(install_file):
+    raise FontpkgError('cannot create \'{}\': File exists'.format(install_file))
+with open(install_file, 'w') as f:
+    f.write(install)
+
+pkgbuild = ''
+pkgbuild += 'pkgname={}\n'.format(fi.pkgname)
+pkgbuild += 'pkgver={}\n'.format(fi.pkgver)
+pkgbuild += 'pkgrel={}\n'.format(fi.pkgrel)
+pkgbuild += 'pkgdesc=\'{}\''.format(fi.pkgdesc)
+pkgbuild += '''
+arch=('any')
+depends=('fontconfig' 'xorg-font-utils')
+'''
+pkgbuild += 'source=({})\n'.format('\''+'\' \''.join(fi.fonts)+'\'')
+pkgbuild += 'install=$pkgname.install'
+pkgbuild += '''
+
+package() {'''
+if fi.ttf:
+    pkgbuild += '''
+    install -d "$pkgdir/usr/share/fonts/TTF"
+    install -m644 "$srcdir/"*.ttf "$pkgdir/usr/share/fonts/TTF/"
+    '''
+
+if fi.otf:
+    pkgbuild += '''
+    install -d "$pkgdir/usr/share/fonts/OTF"
+    install -m644 "$srcdir/"*.otf "$pkgdir/usr/share/fonts/OTF/"
+'''
+pkgbuild += '}\n\n'
+
+md5s = []
+for i in fi.fonts:
+    with open(i, 'rb') as f:
+        m = hashlib.md5()
+        while True:
+            d = f.read(128)
+            if not d:
+                break
+            m.update(d)
+    md5s.append(m.hexdigest())
+pkgbuild += 'md5sums=({})\n'.format('\''+'\'\n         \''.join(md5s)+'\'')
+
+if os.path.exists('PKGBUILD'):
+    raise FontpkgError('cannot create \'PKGBUILD\': File exists')
+with open('PKGBUILD', 'w') as f:
+    f.write(pkgbuild)
