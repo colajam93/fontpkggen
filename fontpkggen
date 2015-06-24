@@ -70,16 +70,14 @@ class FontpkgInfo:
             self.pkgdesc = '{} font'.format(pkgname)
         self.fonts = []
         for i in fonts:
-            self.fonts.append(os.path.basename(i))
+            self.fonts.append(os.path.basename(i.lower()))
         self.ttf, self.otf = check_fonts(self.fonts)
 
     def __repr__(self):
         return '{}({})'.format(self.__class__, self.__dict__)
 
-# print('Checking argument')
 fi = FontpkgInfo(args.pkgname, args.pkgver, args.pkgrel, args.pkgdesc, args.fontfiles)
 
-# print('Making output directory')
 if args.outdir:
     outdir = args.outdir
 else:
@@ -88,11 +86,14 @@ else:
 if os.path.exists(outdir):
     raise FontpkgError('cannot create directory \'{}\': File exists'.format(outdir))
 
+for i in args.fontfiles:
+    if not os.path.exists(i):
+        raise FontpkgError('cannot access \'{}\': No such file'.format(i))
+
 os.mkdir(outdir)
 
-# print('Copying font files')
 for i in args.fontfiles:
-    shutil.copy(i, outdir)
+    shutil.copy(i, outdir+'/'+i.lower())
 
 os.chdir(outdir)
 
