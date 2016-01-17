@@ -10,19 +10,27 @@ from enum import Enum
 # for debug
 # import json
 
-parser = argparse.ArgumentParser(description='TTF/OTF font PKGBUILD and .install generator')
-parser.add_argument('-a', '--auto', help='Make [pkgname] directory, copy fonts, generate PKGBUILD',
+parser = argparse.ArgumentParser(
+    description='TTF/OTF font PKGBUILD and .install generator')
+parser.add_argument(
+    '-a',
+    '--auto',
+    help='Make [pkgname] directory, copy fonts, generate PKGBUILD',
+    action='store_true')
+parser.add_argument('-f',
+                    '--force',
+                    help='Replace existing file',
                     action='store_true')
-parser.add_argument('-f', '--force', help='Replace existing file',
-                    action='store_true')
-parser.add_argument('--pkgver', help='Package version default=1.0',
+parser.add_argument('--pkgver',
+                    help='Package version default=1.0',
                     default='1.0')
-parser.add_argument('--pkgrel', help='Package release number default=1',
+parser.add_argument('--pkgrel',
+                    help='Package release number default=1',
                     default='1')
-parser.add_argument('--pkgdesc', help='Package description default=\'[pkgname] font\'')
+parser.add_argument('--pkgdesc',
+                    help='Package description default=\'[pkgname] font\'')
 parser.add_argument('pkgname', help='Package name')
-parser.add_argument('fontfiles', help='TTF/OTF font files',
-                    nargs='+')
+parser.add_argument('fontfiles', help='TTF/OTF font files', nargs='+')
 args = parser.parse_args()
 
 
@@ -118,16 +126,19 @@ post_install() {
     echo -n "Updating font cache... "
     fc-cache >/dev/null -f
         '''
+
         if self.ttf:
             install += '''
     mkfontscale /usr/share/fonts/TTF
     mkfontdir   /usr/share/fonts/TTF
         '''
+
         if self.otf:
             install += '''
     mkfontscale /usr/share/fonts/OTF
     mkfontdir   /usr/share/fonts/OTF
         '''
+
         install += '''
     echo "done"
 }
@@ -140,6 +151,7 @@ post_remove() {
     post_install
 }
 '''
+
         return install.lstrip()
 
     def gen_pkgbuild(self):
@@ -153,25 +165,28 @@ post_remove() {
         names = []
         for i in self.fonts:
             names.append(i['name'])
-        pkgbuild += 'source=({})\n'.format("'"+"' '".join(names)+"'")
+        pkgbuild += 'source=({})\n'.format("'" + "' '".join(names) + "'")
         pkgbuild += 'install=$pkgname.install\n\n'
         pkgbuild += 'package() {\n'
         if self.ttf:
             pkgbuild += '    install -d "$pkgdir/usr/share/fonts/TTF"\n'
             for i in self.fonts:
                 if i['type'] == FontType.ttf:
-                    pkgbuild += '    install -m644 "$srcdir/{}" "$pkgdir/usr/share/fonts/TTF/"\n'.format(i['name'])
+                    pkgbuild += '    install -m644 "$srcdir/{}" "$pkgdir/usr/share/fonts/TTF/"\n'.format(
+                        i['name'])
         if self.otf:
             pkgbuild += '    install -d "$pkgdir/usr/share/fonts/OTF"\n'
             for i in self.fonts:
                 if i['type'] == FontType.otf:
-                    pkgbuild += '    install -m644 "$srcdir/{}" "$pkgdir/usr/share/fonts/OTF/"\n'.format(i['name'])
+                    pkgbuild += '    install -m644 "$srcdir/{}" "$pkgdir/usr/share/fonts/OTF/"\n'.format(
+                        i['name'])
 
         pkgbuild += '}\n\n'
         md5s = []
         for i in self.fonts:
             md5s.append(i['md5'])
-        pkgbuild += 'md5sums=({})\n'.format("'"+"'\n         '".join(md5s)+"'")
+        pkgbuild += 'md5sums=({})\n'.format("'" + "'\n         '".join(md5s) +
+                                            "'")
         return pkgbuild
 
 
@@ -180,10 +195,11 @@ for i in args.fontfiles:
     if not os.path.exists(i):
         error_list.append(i)
 if not len(error_list) == 0:
-    raise FontpkgError('cannot access ' + ', '.join(error_list)+': No such file')
+    raise FontpkgError('cannot access ' + ', '.join(error_list) +
+                       ': No such file')
 
-fi = FontpkgInfo(args.pkgname, args.pkgver, args.pkgrel, args.pkgdesc, args.fontfiles)
-
+fi = FontpkgInfo(args.pkgname, args.pkgver, args.pkgrel, args.pkgdesc,
+                 args.fontfiles)
 
 # class FontpkgInfoJSONEncoder(json.JSONEncoder):
 #    def default(self, o):
@@ -195,7 +211,8 @@ fi = FontpkgInfo(args.pkgname, args.pkgver, args.pkgrel, args.pkgdesc, args.font
 
 if args.auto:
     if os.path.exists(fi.pkgname):
-        raise FontpkgError('cannot create directory \'{}\': File exists'.format(fi.pkgname))
+        raise FontpkgError(
+            'cannot create directory \'{}\': File exists'.format(fi.pkgname))
     else:
         os.mkdir(fi.pkgname)
         os.chdir(fi.pkgname)
@@ -205,7 +222,8 @@ if args.auto:
 install_file = '{}.install'.format(fi.pkgname)
 if not args.force:
     if os.path.exists(install_file):
-        raise FontpkgError('cannot create \'{}\': File exists'.format(install_file))
+        raise FontpkgError('cannot create \'{}\': File exists'.format(
+            install_file))
     if os.path.exists('PKGBUILD'):
         raise FontpkgError('cannot create \'PKGBUILD\': File exists')
 with open(install_file, 'w') as f:
